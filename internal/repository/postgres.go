@@ -95,6 +95,12 @@ func (r *postgresRepo) GetOrdersByUserID(ctx context.Context, userID int64) ([]m
 		}
 		orders = append(orders, order)
 	}
+
+	// Проверяем ошибки, возникшие во время итерации
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over orders: %w", err)
+	}
+
 	return orders, nil
 }
 
@@ -161,6 +167,12 @@ func (r *postgresRepo) GetWithdrawalsByUserID(ctx context.Context, userID int64)
 		}
 		withdrawals = append(withdrawals, withdrawal)
 	}
+
+	// Проверяем ошибки, возникшие во время итерации
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over withdrawals: %w", err)
+	}
+
 	return withdrawals, nil
 }
 
