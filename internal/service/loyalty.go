@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"gophermart/internal/models"
 	"gophermart/internal/repository"
-	"net/http"
 	"strconv"
 	"time"
 
@@ -226,30 +225,4 @@ func (s *loyaltyService) isValidOrderNumber(number string) bool {
 	}
 
 	return sum%10 == 0
-}
-
-func (s *loyaltyService) checkAccrualSystem(orderNumber string) (*models.AccrualResponse, error) {
-	if s.accrualSystemAddress == "" {
-		return nil, fmt.Errorf("accrual system address not configured")
-	}
-
-	url := fmt.Sprintf("%s/api/orders/%s", s.accrualSystemAddress, orderNumber)
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, fmt.Errorf("failed to request accrual system: %w", err)
-	}
-	defer resp.Body.Close()
-
-	switch resp.StatusCode {
-	case http.StatusOK:
-		var accrualResp models.AccrualResponse
-		// В реальной реализации здесь был бы парсинг JSON ответа
-		return &accrualResp, nil
-	case http.StatusNoContent:
-		return nil, nil
-	case http.StatusTooManyRequests:
-		return nil, fmt.Errorf("rate limit exceeded")
-	default:
-		return nil, fmt.Errorf("accrual system error: %d", resp.StatusCode)
-	}
 }

@@ -26,9 +26,7 @@ func Auth(next http.Handler) http.Handler {
 			authHeader = cookie.Value
 		} else {
 			// Убираем префикс "Bearer " если есть
-			if strings.HasPrefix(authHeader, "Bearer ") {
-				authHeader = strings.TrimPrefix(authHeader, "Bearer ")
-			}
+			authHeader = strings.TrimPrefix(authHeader, "Bearer ")
 		}
 
 		// Парсим JWT токен
