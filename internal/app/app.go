@@ -42,10 +42,10 @@ func New(cfg *config.Config) (*App, error) {
 	app.Repo = repository.New(app.DB)
 
 	// Инициализация сервиса
-	app.Service = service.New(app.Repo, cfg.AccrualSystemAddress)
+	app.Service = service.New(app.Repo, cfg.AccrualSystemAddress, cfg)
 
 	// Инициализация обработчиков
-	app.Handlers = handlers.New(app.Service)
+	app.Handlers = handlers.New(app.Service, cfg)
 
 	// Инициализация роутера
 	app.Router = app.initRouter()
@@ -100,7 +100,7 @@ func (app *App) initRouter() *chi.Mux {
 
 		// Защищенные маршруты
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.Auth)
+			r.Use(middleware.Auth(app.Config))
 			r.Post("/user/orders", app.Handlers.UploadOrder)
 			r.Get("/user/orders", app.Handlers.GetOrders)
 			r.Get("/user/balance", app.Handlers.GetBalance)

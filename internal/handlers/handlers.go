@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 
+	"gophermart/internal/config"
+	"gophermart/internal/errors"
 	"gophermart/internal/middleware"
 	"gophermart/internal/models"
 	"gophermart/internal/service"
@@ -15,12 +17,14 @@ import (
 type Handler struct {
 	service   service.Service
 	validator *validator.Validator
+	config    *config.Config
 }
 
-func New(service service.Service) *Handler {
+func New(service service.Service, cfg *config.Config) *Handler {
 	return &Handler{
 		service:   service,
 		validator: validator.New(),
+		config:    cfg,
 	}
 }
 
@@ -45,22 +49,17 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 
 	_, token, err := h.service.Register(r.Context(), req.Login, req.Password)
 	if err != nil {
-		if err.Error() == "user already exists" {
+		switch {
+		case errors.Is(err, errors.ErrUserAlreadyExists):
 			http.Error(w, "User already exists", http.StatusConflict)
-			return
+		default:
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
 		}
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	// Устанавливаем cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:     "auth_token",
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		MaxAge:   86400, // 24 часа
-	})
+	// Устанавливаем cookie с использованием конфигурации
+	setAuthCookie(w, token, h.config)
 
 	w.WriteHeader(http.StatusOK)
 }
@@ -86,22 +85,17 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 	_, token, err := h.service.Login(r.Context(), req.Login, req.Password)
 	if err != nil {
-		if err.Error() == "invalid credentials" {
+		switch {
+		case errors.Is(err, errors.ErrInvalidCredentials):
 			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
-			return
+		default:
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
 		}
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	// Устанавливаем cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:     "auth_token",
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		MaxAge:   86400, // 24 часа
-	})
+	// Устанавливаем cookie с использованием конфигурации
+	setAuthCookie(w, token, h.config)
 
 	w.WriteHeader(http.StatusOK)
 }
@@ -135,10 +129,10 @@ func (h *Handler) UploadOrder(w http.ResponseWriter, r *http.Request) {
 
 	order, err := h.service.UploadOrder(r.Context(), userID, orderNumber)
 	if err != nil {
-		switch err.Error() {
-		case "invalid order number format":
+		switch {
+		case errors.Is(err, errors.ErrInvalidOrderNumberFormat):
 			http.Error(w, "Invalid order number format", http.StatusUnprocessableEntity)
-		case "order already uploaded by another user":
+		case errors.Is(err, errors.ErrOrderAlreadyUploadedByAnotherUser):
 			http.Error(w, "Order already uploaded by another user", http.StatusConflict)
 		default:
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -238,10 +232,10 @@ func (h *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
 
 	_, err := h.service.Withdraw(r.Context(), userID, req.Order, req.Sum)
 	if err != nil {
-		switch err.Error() {
-		case "invalid order number format":
+		switch {
+		case errors.Is(err, errors.ErrInvalidOrderNumberFormat):
 			http.Error(w, "Invalid order number format", http.StatusUnprocessableEntity)
-		case "insufficient funds":
+		case errors.Is(err, errors.ErrInsufficientFunds):
 			http.Error(w, "Insufficient funds", http.StatusPaymentRequired)
 		default:
 			http.Error(w, "Internal server error", http.StatusInternalServerError)

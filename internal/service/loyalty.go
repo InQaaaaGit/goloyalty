@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"gophermart/internal/config"
+	"gophermart/internal/errors"
 	"gophermart/internal/models"
 	"gophermart/internal/repository"
 	"strconv"
@@ -12,20 +14,22 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
+	"gophermart/internal/constants"
+
 	"github.com/golang-jwt/jwt/v5"
 )
 
 type loyaltyService struct {
 	repo                 repository.Repository
 	accrualSystemAddress string
-	jwtSecret            string
+	config               *config.Config
 }
 
-func New(repo repository.Repository, accrualSystemAddress string) Service {
+func New(repo repository.Repository, accrualSystemAddress string, cfg *config.Config) Service {
 	return &loyaltyService{
 		repo:                 repo,
 		accrualSystemAddress: accrualSystemAddress,
-		jwtSecret:            "default-secret-key-change-in-production", // В реальном приложении загружается из конфига
+		config:               cfg,
 	}
 }
 
@@ -43,28 +47,28 @@ func (s *loyaltyService) Register(ctx context.Context, login, password string) (
 	// Проверяем, что пользователь не существует
 	existingUser, err := s.repo.GetUserByLogin(ctx, login)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to check existing user: %w", err)
+		return nil, "", errors.Wrap(err, "failed to check existing user")
 	}
 	if existingUser != nil {
-		return nil, "", fmt.Errorf("user already exists")
+		return nil, "", errors.ErrUserAlreadyExists
 	}
 
 	// Хешируем пароль
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to hash password: %w", err)
+		return nil, "", errors.Wrap(err, "failed to hash password")
 	}
 
 	// Создаем пользователя
 	user, err := s.repo.CreateUser(ctx, login, string(hashedPassword))
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to create user: %w", err)
+		return nil, "", errors.Wrap(err, "failed to create user")
 	}
 
 	// Генерируем JWT токен
 	token, err := s.generateJWT(user.ID)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to generate token: %w", err)
+		return nil, "", errors.Wrap(err, "failed to generate token")
 	}
 
 	return user, token, nil
@@ -84,22 +88,22 @@ func (s *loyaltyService) Login(ctx context.Context, login, password string) (*mo
 	// Получаем пользователя
 	user, err := s.repo.GetUserByLogin(ctx, login)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to get user: %w", err)
+		return nil, "", errors.Wrap(err, "failed to get user")
 	}
 	if user == nil {
-		return nil, "", fmt.Errorf("invalid credentials")
+		return nil, "", errors.ErrInvalidCredentials
 	}
 
 	// Проверяем пароль
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
 	if err != nil {
-		return nil, "", fmt.Errorf("invalid credentials")
+		return nil, "", errors.ErrInvalidCredentials
 	}
 
 	// Генерируем JWT токен
 	token, err := s.generateJWT(user.ID)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to generate token: %w", err)
+		return nil, "", errors.Wrap(err, "failed to generate token")
 	}
 
 	return user, token, nil
@@ -112,27 +116,27 @@ func (s *loyaltyService) GetUserByID(ctx context.Context, userID int64) (*models
 func (s *loyaltyService) UploadOrder(ctx context.Context, userID int64, orderNumber string) (*models.Order, error) {
 	// Проверяем формат номера заказа (алгоритм Луна)
 	if !s.isValidOrderNumber(orderNumber) {
-		return nil, fmt.Errorf("invalid order number format")
+		return nil, errors.ErrInvalidOrderNumberFormat
 	}
 
 	// Проверяем, не загружен ли уже этот заказ
 	existingOrder, err := s.repo.GetOrderByNumber(ctx, orderNumber)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check existing order: %w", err)
+		return nil, errors.Wrap(err, "failed to check existing order")
 	}
 
 	if existingOrder != nil {
 		if existingOrder.UserID == userID {
 			return existingOrder, nil // Заказ уже загружен этим пользователем
 		} else {
-			return nil, fmt.Errorf("order already uploaded by another user")
+			return nil, errors.ErrOrderAlreadyUploadedByAnotherUser
 		}
 	}
 
 	// Создаем новый заказ
 	order, err := s.repo.CreateOrder(ctx, userID, orderNumber)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create order: %w", err)
+		return nil, errors.Wrap(err, "failed to create order")
 	}
 
 	return order, nil
@@ -149,24 +153,24 @@ func (s *loyaltyService) GetBalance(ctx context.Context, userID int64) (*models.
 func (s *loyaltyService) Withdraw(ctx context.Context, userID int64, order string, sum float64) (*models.Withdrawal, error) {
 	// Проверяем формат номера заказа
 	if !s.isValidOrderNumber(order) {
-		return nil, fmt.Errorf("invalid order number format")
+		return nil, errors.ErrInvalidOrderNumberFormat
 	}
 
 	// Получаем текущий баланс
 	balance, err := s.repo.GetUserBalance(ctx, userID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user balance: %w", err)
+		return nil, errors.Wrap(err, "failed to get user balance")
 	}
 
 	// Проверяем достаточность средств
 	if balance.Current < sum {
-		return nil, fmt.Errorf("insufficient funds")
+		return nil, errors.ErrInsufficientFunds
 	}
 
 	// Создаем списание
 	withdrawal, err := s.repo.CreateWithdrawal(ctx, userID, order, sum)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create withdrawal: %w", err)
+		return nil, errors.Wrap(err, "failed to create withdrawal")
 	}
 
 	// Обновляем баланс
@@ -174,7 +178,7 @@ func (s *loyaltyService) Withdraw(ctx context.Context, userID int64, order strin
 	newWithdrawn := balance.Withdrawn + sum
 	err = s.repo.UpdateUserBalance(ctx, userID, newCurrent, newWithdrawn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to update user balance: %w", err)
+		return nil, errors.Wrap(err, "failed to update user balance")
 	}
 
 	return withdrawal, nil
@@ -201,20 +205,20 @@ func (s *loyaltyService) generateJWT(userID int64) (string, error) {
 	}
 	tokenID := hex.EncodeToString(randomBytes)
 
-	// Создаем JWT токен
+	// Создаем JWT токен с настраиваемым временем жизни
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"user_id": userID,
 		"jti":     tokenID,
-		"exp":     time.Now().Add(24 * time.Hour).Unix(),
+		"exp":     time.Now().Add(s.config.JWTExpiration).Unix(),
 		"iat":     time.Now().Unix(),
 	})
 
-	return token.SignedString([]byte(s.jwtSecret))
+	return token.SignedString([]byte(s.config.JWTSecret))
 }
 
 func (s *loyaltyService) isValidOrderNumber(number string) bool {
 	// Проверяем, что номер не пустой и имеет минимальную длину
-	if len(number) < 2 {
+	if len(number) < constants.MinOrderNumberLength {
 		return false
 	}
 
@@ -249,13 +253,13 @@ func (s *loyaltyService) isValidOrderNumber(number string) bool {
 
 func (s *loyaltyService) validatePassword(password string) error {
 	// Проверяем минимальную длину пароля
-	if len(password) < 8 {
-		return fmt.Errorf("password must be at least 8 characters long")
+	if len(password) < constants.MinPasswordLength {
+		return fmt.Errorf("password must be at least %d characters long", constants.MinPasswordLength)
 	}
 
 	// Проверяем максимальную длину пароля (bcrypt ограничение - 72 байта)
-	if len(password) > 72 {
-		return fmt.Errorf("password must not exceed 72 characters")
+	if len(password) > constants.MaxPasswordLength {
+		return fmt.Errorf("password must not exceed %d characters", constants.MaxPasswordLength)
 	}
 
 	// Проверяем, что пароль не пустой
@@ -268,13 +272,13 @@ func (s *loyaltyService) validatePassword(password string) error {
 
 func (s *loyaltyService) validateLogin(login string) error {
 	// Проверяем минимальную длину логина
-	if len(login) < 3 {
-		return fmt.Errorf("login must be at least 3 characters long")
+	if len(login) < constants.MinLoginLength {
+		return fmt.Errorf("login must be at least %d characters long", constants.MinLoginLength)
 	}
 
-	// Проверяем максимальную длину логина (bcrypt ограничение - 72 байта)
-	if len(login) > 72 {
-		return fmt.Errorf("login must not exceed 72 characters")
+	// Проверяем максимальную длину логина
+	if len(login) > constants.MaxLoginLength {
+		return fmt.Errorf("login must not exceed %d characters", constants.MaxLoginLength)
 	}
 
 	// Проверяем, что логин не пустой
