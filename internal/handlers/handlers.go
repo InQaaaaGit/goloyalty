@@ -9,14 +9,19 @@ import (
 	"gophermart/internal/middleware"
 	"gophermart/internal/models"
 	"gophermart/internal/service"
+	"gophermart/internal/validator"
 )
 
 type Handler struct {
-	service service.Service
+	service   service.Service
+	validator *validator.Validator
 }
 
 func New(service service.Service) *Handler {
-	return &Handler{service: service}
+	return &Handler{
+		service:   service,
+		validator: validator.New(),
+	}
 }
 
 // Register регистрация пользователя
@@ -32,9 +37,9 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Валидация
-	if req.Login == "" || req.Password == "" {
-		http.Error(w, "Login and password are required", http.StatusBadRequest)
+	// Валидация с использованием validator
+	if err := h.validator.Validate(req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -73,9 +78,9 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Валидация
-	if req.Login == "" || req.Password == "" {
-		http.Error(w, "Login and password are required", http.StatusBadRequest)
+	// Валидация с использованием validator
+	if err := h.validator.Validate(req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -225,9 +230,9 @@ func (h *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Валидация
-	if req.Order == "" || req.Sum <= 0 {
-		http.Error(w, "Invalid request data", http.StatusBadRequest)
+	// Валидация с использованием validator
+	if err := h.validator.Validate(req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 

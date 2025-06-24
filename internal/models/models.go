@@ -39,20 +39,20 @@ type Withdrawal struct {
 
 // RegisterRequest запрос на регистрацию
 type RegisterRequest struct {
-	Login    string `json:"login"`
-	Password string `json:"password"`
+	Login    string `json:"login" validate:"required,min=3,max=72"`
+	Password string `json:"password" validate:"required,min=8,max=72"`
 }
 
 // LoginRequest запрос на вход
 type LoginRequest struct {
-	Login    string `json:"login"`
-	Password string `json:"password"`
+	Login    string `json:"login" validate:"required,min=3,max=72"`
+	Password string `json:"password" validate:"required,min=8,max=72"`
 }
 
 // WithdrawRequest запрос на списание средств
 type WithdrawRequest struct {
-	Order string  `json:"order"`
-	Sum   float64 `json:"sum"`
+	Order string  `json:"order" validate:"required"`
+	Sum   float64 `json:"sum" validate:"required,gt=0"`
 }
 
 // AccrualResponse ответ от системы начислений
