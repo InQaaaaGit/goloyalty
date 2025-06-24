@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - RUN_ADDRESS=:8080
+      - DATABASE_URI=postgres://gophermart:password@postgres:5432/gophermart?sslmode=disable
+      - ACCRUAL_SYSTEM_ADDRESS=http://localhost:8081
+      - JWT_SECRET=your-secret-key-change-in-production
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=gophermart
+      - POSTGRES_USER=gophermart
+      - POSTGRES_PASSWORD=password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data: 
