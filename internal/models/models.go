@@ -6,9 +6,10 @@ import (
 
 // User представляет пользователя системы
 type User struct {
-	ID       int64  `json:"id"`
-	Login    string `json:"login"`
-	Password string `json:"-"` // Пароль не возвращается в JSON
+	ID        int64     `json:"id"`
+	Login     string    `json:"login"`
+	Password  string    `json:"-"` // Пароль не возвращается в JSON
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // Order представляет заказ пользователя

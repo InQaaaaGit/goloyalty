@@ -18,8 +18,9 @@ func New(db *sql.DB) Repository {
 
 func (r *postgresRepo) CreateUser(ctx context.Context, login, hashedPassword string) (*models.User, error) {
 	var user models.User
-	query := `INSERT INTO users (login, password_hash) VALUES ($1, $2) RETURNING id, login`
-	err := r.db.QueryRowContext(ctx, query, login, hashedPassword).Scan(&user.ID, &user.Login)
+	query := `INSERT INTO users (login, password_hash) VALUES ($1, $2) RETURNING id, login, password_hash, created_at`
+	err := r.db.QueryRowContext(ctx, query, login, hashedPassword).Scan(
+		&user.ID, &user.Login, &user.Password, &user.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
@@ -28,8 +29,9 @@ func (r *postgresRepo) CreateUser(ctx context.Context, login, hashedPassword str
 
 func (r *postgresRepo) GetUserByLogin(ctx context.Context, login string) (*models.User, error) {
 	var user models.User
-	query := `SELECT id, login, password_hash FROM users WHERE login = $1`
-	err := r.db.QueryRowContext(ctx, query, login).Scan(&user.ID, &user.Login, &user.Password)
+	query := `SELECT id, login, password_hash, created_at FROM users WHERE login = $1`
+	err := r.db.QueryRowContext(ctx, query, login).Scan(
+		&user.ID, &user.Login, &user.Password, &user.CreatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -41,8 +43,9 @@ func (r *postgresRepo) GetUserByLogin(ctx context.Context, login string) (*model
 
 func (r *postgresRepo) GetUserByID(ctx context.Context, id int64) (*models.User, error) {
 	var user models.User
-	query := `SELECT id, login, password_hash FROM users WHERE id = $1`
-	err := r.db.QueryRowContext(ctx, query, id).Scan(&user.ID, &user.Login, &user.Password)
+	query := `SELECT id, login, password_hash, created_at FROM users WHERE id = $1`
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&user.ID, &user.Login, &user.Password, &user.CreatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -54,10 +57,10 @@ func (r *postgresRepo) GetUserByID(ctx context.Context, id int64) (*models.User,
 
 func (r *postgresRepo) CreateOrder(ctx context.Context, userID int64, number string) (*models.Order, error) {
 	var order models.Order
-	query := `INSERT INTO orders (user_id, number, status, uploaded_at) VALUES ($1, $2, $3, $4) RETURNING id, user_id, number, status, uploaded_at`
+	query := `INSERT INTO orders (user_id, number, status, uploaded_at) VALUES ($1, $2, $3, $4) RETURNING id, user_id, number, status, accrual, uploaded_at`
 	now := time.Now()
-	err := r.db.QueryRowContext(ctx, query, userID, number, models.OrderStatusNew, now).Scan(
-		&order.ID, &order.UserID, &order.Number, &order.Status, &order.UploadedAt)
+	err := r.db.QueryRowContext(ctx, query, userID, number, "NEW", now).Scan(
+		&order.ID, &order.UserID, &order.Number, &order.Status, &order.Accrual, &order.UploadedAt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create order: %w", err)
 	}
@@ -174,47 +177,4 @@ func (r *postgresRepo) GetWithdrawalsByUserID(ctx context.Context, userID int64)
 	}
 
 	return withdrawals, nil
-}
-
-func (r *postgresRepo) InitDB(ctx context.Context) error {
-	queries := []string{
-		`CREATE TABLE IF NOT EXISTS users (
-			id SERIAL PRIMARY KEY,
-			login VARCHAR(255) UNIQUE NOT NULL,
-			password_hash VARCHAR(255) NOT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		)`,
-		`CREATE TABLE IF NOT EXISTS orders (
-			id SERIAL PRIMARY KEY,
-			user_id INTEGER NOT NULL REFERENCES users(id),
-			number VARCHAR(255) UNIQUE NOT NULL,
-			status VARCHAR(50) NOT NULL,
-			accrual DECIMAL(10,2),
-			uploaded_at TIMESTAMP NOT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		)`,
-		`CREATE TABLE IF NOT EXISTS user_balances (
-			user_id INTEGER PRIMARY KEY REFERENCES users(id),
-			current_balance DECIMAL(10,2) DEFAULT 0,
-			withdrawn_balance DECIMAL(10,2) DEFAULT 0,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		)`,
-		`CREATE TABLE IF NOT EXISTS withdrawals (
-			id SERIAL PRIMARY KEY,
-			user_id INTEGER NOT NULL REFERENCES users(id),
-			order_number VARCHAR(255) NOT NULL,
-			sum DECIMAL(10,2) NOT NULL,
-			processed_at TIMESTAMP NOT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		)`,
-	}
-
-	for _, query := range queries {
-		_, err := r.db.ExecContext(ctx, query)
-		if err != nil {
-			return fmt.Errorf("failed to execute query: %w", err)
-		}
-	}
-
-	return nil
 }

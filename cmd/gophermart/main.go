@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"gophermart/internal/config"
 	"gophermart/internal/handlers"
 	"gophermart/internal/middleware"
+	"gophermart/internal/migrations"
 	"gophermart/internal/repository"
 	"gophermart/internal/service"
 
@@ -21,32 +23,39 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		log.Printf("Application error: %v", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	// Загрузка конфигурации
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		return fmt.Errorf("failed to load config: %w", err)
 	}
 
 	// Подключение к базе данных
 	db, err := sql.Open("postgres", cfg.DatabaseURI)
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		return fmt.Errorf("failed to connect to database: %w", err)
 	}
 	defer db.Close()
 
 	// Проверка подключения к БД
 	if err := db.Ping(); err != nil {
-		log.Fatalf("Failed to ping database: %v", err)
+		return fmt.Errorf("failed to ping database: %w", err)
+	}
+
+	// Запуск миграций
+	migrator := migrations.New(db)
+	if err := migrator.Run(); err != nil {
+		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
 	// Инициализация репозитория
 	repo := repository.New(db)
-
-	// Инициализация базы данных
-	ctx := context.Background()
-	if err := repo.InitDB(ctx); err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
-	}
 
 	// Инициализация сервиса
 	svc := service.New(repo, cfg.AccrualSystemAddress)
@@ -91,7 +100,7 @@ func main() {
 	go func() {
 		log.Printf("Server starting on %s", cfg.RunAddress)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Failed to start server: %v", err)
+			log.Printf("Server error: %v", err)
 		}
 	}()
 
@@ -108,4 +117,5 @@ func main() {
 	}
 
 	log.Println("Server exited")
+	return nil
 }

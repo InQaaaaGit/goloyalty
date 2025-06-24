@@ -24,7 +24,4 @@ type Repository interface {
 	// Списания
 	CreateWithdrawal(ctx context.Context, userID int64, order string, sum float64) (*models.Withdrawal, error)
 	GetWithdrawalsByUserID(ctx context.Context, userID int64) ([]models.Withdrawal, error)
-
-	// Инициализация БД
-	InitDB(ctx context.Context) error
 }
