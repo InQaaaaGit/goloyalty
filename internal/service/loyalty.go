@@ -30,6 +30,16 @@ func New(repo repository.Repository, accrualSystemAddress string) Service {
 }
 
 func (s *loyaltyService) Register(ctx context.Context, login, password string) (*models.User, string, error) {
+	// Валидация логина
+	if err := s.validateLogin(login); err != nil {
+		return nil, "", err
+	}
+
+	// Валидация пароля
+	if err := s.validatePassword(password); err != nil {
+		return nil, "", err
+	}
+
 	// Проверяем, что пользователь не существует
 	existingUser, err := s.repo.GetUserByLogin(ctx, login)
 	if err != nil {
@@ -61,6 +71,16 @@ func (s *loyaltyService) Register(ctx context.Context, login, password string) (
 }
 
 func (s *loyaltyService) Login(ctx context.Context, login, password string) (*models.User, string, error) {
+	// Валидация логина
+	if err := s.validateLogin(login); err != nil {
+		return nil, "", err
+	}
+
+	// Валидация пароля
+	if err := s.validatePassword(password); err != nil {
+		return nil, "", err
+	}
+
 	// Получаем пользователя
 	user, err := s.repo.GetUserByLogin(ctx, login)
 	if err != nil {
@@ -225,4 +245,42 @@ func (s *loyaltyService) isValidOrderNumber(number string) bool {
 	}
 
 	return sum%10 == 0
+}
+
+func (s *loyaltyService) validatePassword(password string) error {
+	// Проверяем минимальную длину пароля
+	if len(password) < 8 {
+		return fmt.Errorf("password must be at least 8 characters long")
+	}
+
+	// Проверяем максимальную длину пароля (bcrypt ограничение - 72 байта)
+	if len(password) > 72 {
+		return fmt.Errorf("password must not exceed 72 characters")
+	}
+
+	// Проверяем, что пароль не пустой
+	if password == "" {
+		return fmt.Errorf("password cannot be empty")
+	}
+
+	return nil
+}
+
+func (s *loyaltyService) validateLogin(login string) error {
+	// Проверяем минимальную длину логина
+	if len(login) < 3 {
+		return fmt.Errorf("login must be at least 3 characters long")
+	}
+
+	// Проверяем максимальную длину логина (bcrypt ограничение - 72 байта)
+	if len(login) > 72 {
+		return fmt.Errorf("login must not exceed 72 characters")
+	}
+
+	// Проверяем, что логин не пустой
+	if login == "" {
+		return fmt.Errorf("login cannot be empty")
+	}
+
+	return nil
 }
