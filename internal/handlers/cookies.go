@@ -20,6 +20,7 @@ func setAuthCookie(w http.ResponseWriter, token string, cfg *config.Config) {
 }
 
 // clearAuthCookie удаляет cookie аутентификации
+// nolint:unused // Эта функция используется в будущих версиях для logout
 func clearAuthCookie(w http.ResponseWriter, cfg *config.Config) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     cfg.CookieName,

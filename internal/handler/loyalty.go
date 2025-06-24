@@ -67,7 +67,10 @@ func (h *loyaltyHandler) UploadOrder(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(order)
+	if err := json.NewEncoder(w).Encode(order); err != nil {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
 }
 
 func (h *loyaltyHandler) GetOrders(w http.ResponseWriter, r *http.Request) {
@@ -94,7 +97,10 @@ func (h *loyaltyHandler) GetOrders(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(orders)
+	if err := json.NewEncoder(w).Encode(orders); err != nil {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
 }
 
 func (h *loyaltyHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
@@ -116,7 +122,10 @@ func (h *loyaltyHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(balance)
+	if err := json.NewEncoder(w).Encode(balance); err != nil {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
 }
 
 func (h *loyaltyHandler) Withdraw(w http.ResponseWriter, r *http.Request) {
@@ -160,5 +169,8 @@ func (h *loyaltyHandler) Withdraw(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(withdrawal)
+	if err := json.NewEncoder(w).Encode(withdrawal); err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
 }
